@@ -9,4 +9,8 @@
 - Keras
 - Flair
 - Spacy
+- Nltk
+- Scipy
+- Sklearn
+- Pandas_ml
 
