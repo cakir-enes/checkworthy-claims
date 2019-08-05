@@ -4,6 +4,40 @@ import pickle
 import numpy  as np
 from keras.preprocessing.sequence import pad_sequences
 import sys
+from scipy import spatial
+from flair.embeddings import WordEmbeddings, FlairEmbeddings, DocumentPoolEmbeddings, Sentence, CharacterEmbeddings
+import torch
+
+def embed_tweet(dataTweet):
+    # initialize the word embeddings
+    tr_embedding = WordEmbeddings('tr')
+    char_embedding = CharacterEmbeddings()
+
+    # initialize the document embeddings, mode = mean
+    document_embeddings = DocumentPoolEmbeddings([tr_embedding,char_embedding])
+        
+    tweetList=[]
+    for tweet in dataTweet:
+        #print(tweet["tweet"])
+        tweetList.append(tweet["tweet"])
+
+    tweetTensors=[]
+    for tweet in tweetList:
+        #print(norm_tweet(tweet))
+        sentence = Sentence(norm_tweet(tweet))
+        document_embeddings.embed(sentence)
+        tweetTensors.append(sentence.get_embedding().data)
+    return tweetTensors
+
+def predictAccorrdingToCosineSim(tweetTensors):
+    claimTensors = torch.load("claimTensors.pt")
+    check_worthy_tweet=[]
+    for tweeetIndex in range(len(tweetTensors)):
+        for claimIndex in range(len(claimTensors)):
+            result = 1 - spatial.distance.cosine(tweetTensors[tweeetIndex],claimTensors[claimIndex])
+            check_worthy_tweet.append(result)
+
+    return check_worthy_tweet
 
 if __name__ == "__main__":
     if len(sys.argv) == 1 or sys.argv[1] == '-h':
@@ -27,10 +61,26 @@ if __name__ == "__main__":
     other_features = np.array([df['obj_subj'], df['has_claim']]).T
     lstm_predicted = LSTM_model.predict([tweets, other_features])
     cnn_predicted = CNN_model.predict(tweets)
+    teyit_predicted = predictAccorrdingToCosineSim(df['tweet'])
 
-    predictions = pd.DataFrame(columns=['CNN', 'LSTM'])
+    predictions = pd.DataFrame(columns=['CNN', 'LSTM', 'CosSimWithTeyit'])
     predictions['CNN'] = [1 if pred > 0.5 else 0 for pred in cnn_predicted]
     predictions['LSTM'] = [1 if pred > 0.5 else 0 for pred in lstm_predicted]
+    predictions['CosSimWithTeyit'] = [1 if pred > 0.8 else 0 for pred in teyit_predicted]
 
     predictions.to_csv('predictions.csv')
     print('\nSee predictions.csv for predictions.')
+
+
+
+def norm_tweet(tweet):
+    pattern = r"[{}]".format(",.;@#!") 
+    tweet = re.sub(pattern, "", str(tweet))
+    tweet = tweet.lower()
+    tweet = tweet.strip()
+    tokens = WPT.tokenize(tweet)
+    filtered_tokens = [token for token in tokens if token not in stop_word_list]
+    tweet = ' '.join(filtered_tokens)
+    return tweet
+
+
