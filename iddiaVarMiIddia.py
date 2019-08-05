@@ -7,8 +7,22 @@ import sys
 from scipy import spatial
 from flair.embeddings import WordEmbeddings, FlairEmbeddings, DocumentPoolEmbeddings, Sentence, CharacterEmbeddings
 import torch
+import re
+import nltk
 
-def embed_tweet(dataTweet):
+def norm_tweet(tweet):
+    WPT = nltk.WordPunctTokenizer()
+    stop_word_list  = nltk.corpus.stopwords.words('turkish')
+    pattern = r"[{}]".format(",.;@#!") 
+    tweet = re.sub(pattern, "", str(tweet))
+    tweet = tweet.lower()
+    tweet = tweet.strip()
+    tokens = WPT.tokenize(tweet)
+    filtered_tokens = [token for token in tokens if token not in stop_word_list]
+    tweet = ' '.join(filtered_tokens)
+    return tweet
+
+def embed_tweet(tweetList):
     # initialize the word embeddings
     tr_embedding = WordEmbeddings('tr')
     char_embedding = CharacterEmbeddings()
@@ -16,10 +30,6 @@ def embed_tweet(dataTweet):
     # initialize the document embeddings, mode = mean
     document_embeddings = DocumentPoolEmbeddings([tr_embedding,char_embedding])
         
-    tweetList=[]
-    for tweet in dataTweet:
-        #print(tweet["tweet"])
-        tweetList.append(tweet["tweet"])
 
     tweetTensors=[]
     for tweet in tweetList:
@@ -29,13 +39,18 @@ def embed_tweet(dataTweet):
         tweetTensors.append(sentence.get_embedding().data)
     return tweetTensors
 
-def predictAccorrdingToCosineSim(tweetTensors):
+def predictAccorrdingToCosineSim(tweets):
+    tweetTensors = embed_tweet(tweets)
     claimTensors = torch.load("claimTensors.pt")
     check_worthy_tweet=[]
     for tweeetIndex in range(len(tweetTensors)):
+        found = False
         for claimIndex in range(len(claimTensors)):
             result = 1 - spatial.distance.cosine(tweetTensors[tweeetIndex],claimTensors[claimIndex])
-            check_worthy_tweet.append(result)
+            if result > 0.8:
+                found = True
+                break
+        check_worthy_tweet.append(1 if found else 0)
 
     return check_worthy_tweet
 
@@ -73,14 +88,6 @@ if __name__ == "__main__":
 
 
 
-def norm_tweet(tweet):
-    pattern = r"[{}]".format(",.;@#!") 
-    tweet = re.sub(pattern, "", str(tweet))
-    tweet = tweet.lower()
-    tweet = tweet.strip()
-    tokens = WPT.tokenize(tweet)
-    filtered_tokens = [token for token in tokens if token not in stop_word_list]
-    tweet = ' '.join(filtered_tokens)
-    return tweet
+
 
 
